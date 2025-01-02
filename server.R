@@ -1,84 +1,94 @@
-if (!"BiocManager" %in% rownames(installed.packages())) {
-  install.packages("BiocManager")
-}
-
-BiocManager::install("sva")
-BiocManager::install("preprocessCore")
-install.packages("doParallel")
-install.packages("pbapply")
-install.packages("nnls")
-
-if (!"devtools" %in% rownames(installed.packages())) {
-  install.packages('devtools')
-}
-
 devtools::install_github('wwylab/DeMixSC')
 
-library(Seurat)
+library(shiny)
 library(DeMixSC)
 
 server <- function(input, output, session) {
-  # Reactive values
-  values <- reactiveValues(
-    seurat_obj = NULL,
+  # Reactive values for both workflows
+  customData <- reactiveValues(
+    counts = NULL,
+    annotations = NULL,
     results = NULL
   )
   
-  # Load data
+  packageData <- reactiveValues(
+    counts = NULL,
+    annotations = NULL,
+    results = NULL
+  )
+  
+  # Custom Data Handler
   observeEvent(input$countsFile, {
     req(input$countsFile)
-    counts <- read.csv(input$countsFile$datapath)
-    annot <- read.csv(input$annotFile$datapath)
-    
-    # Create Seurat object
-    values$seurat_obj <- CreateSeuratObject(counts = counts)
+    customData$counts <- read.csv(input$countsFile$datapath, row.names=1)
   })
   
-  # Run analysis
-  observeEvent(input$runAnalysis, {
-    req(values$seurat_obj)
-    
-    withProgress(message = 'Running DeMixSC analysis...', {
-      # Normalize data
-      values$seurat_obj <- NormalizeData(values$seurat_obj)
-      
-      # Find variable features
-      values$seurat_obj <- FindVariableFeatures(values$seurat_obj)
-      
-      # Run DeMixSC
-      values$results <- DeMixSC(values$seurat_obj,
-                                num.clusters = input$numClusters)
+  observeEvent(input$annotFile, {
+    req(input$annotFile)
+    customData$annotations <- read.csv(input$annotFile$datapath)
+  })
+  
+  # Package Data Handler
+  observeEvent(input$datasetChoice, {
+    if(input$datasetChoice == "retina") {
+      packageData$counts = get("retina_amd_cohort_raw_counts", 
+                               envir = asNamespace("DeMixSC"))
+      packageData$annotations = get("retina_amd_cohort_clinical_info", 
+                                    envir = asNamespace("DeMixSC"))
+    } else if(input$datasetChoice == "hgsc") {
+      packageData$counts = get("hgsc_lee_cohort_raw_counts", 
+                               envir = asNamespace("DeMixSC"))
+      packageData$annotations = get("hgsc_lee_cohort_clinical_info", 
+                                    envir = asNamespace("DeMixSC"))
+    }
+  })
+  
+  # Custom Analysis
+  observeEvent(input$runCustomAnalysis, {
+    req(customData$counts)
+    withProgress(message = 'Running analysis...', {
+      customData$results <- DeMixSC(
+        option = "user.defined",
+        benchmark.mode = FALSE,
+        mat.target = customData$counts,
+        min.expression = input$minExpression,
+        scale.factor = input$scaleFactor
+      )
     })
   })
   
-  # Generate plots
-  output$umap <- renderPlotly({
-    req(values$results)
-    # UMAP visualization code
+  # Package Analysis
+  observeEvent(input$runPackageAnalysis, {
+    req(packageData$counts)
+    withProgress(message = 'Running analysis...', {
+      packageData$results <- DeMixSC(
+        option = input$datasetChoice,
+        benchmark.mode = FALSE,
+        mat.target = packageData$counts,
+        min.expression = input$minExpression,
+        scale.factor = input$scaleFactor
+      )
+    })
   })
   
-  output$proportions <- renderPlotly({
-    req(values$results)
-    # Cell type proportions plot
+  # Output Rendering
+  output$customPlot <- renderPlotly({
+    req(customData$results)
+    # Add visualization code here
   })
   
-  output$statsTable <- renderDT({
-    req(values$results)
-    # Statistics table
+  output$packagePlot <- renderPlotly({
+    req(packageData$results)
+    # Add visualization code here
   })
   
-  output$geneExpr <- renderPlotly({
-    req(values$results)
-    # Gene expression visualization
+  output$customResults <- renderDT({
+    req(customData$results)
+    datatable(customData$results$cell.type.proportions)
   })
   
-  # Download handler
-  output$downloadResults <- downloadHandler(
-    filename = function() {
-      paste("demixsc-results-", Sys.Date(), ".zip", sep="")
-    },
-    content = function(file) {
-      # Package results into zip file
-    }
-  )
+  output$packageResults <- renderDT({
+    req(packageData$results)
+    datatable(packageData$results$cell.type.proportions)
+  })
 }
