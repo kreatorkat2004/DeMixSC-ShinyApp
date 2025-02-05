@@ -1,13 +1,13 @@
 library(shiny)
 library(plotly)
 library(shinyjs)
+library(DT)
 library(shinyWidgets)
 
-# UI for the Shiny application
 ui <- fluidPage(
-  # shinyjs for additional JavaScript functionality
-  shinyjs::useShinyjs(), 
-  # CSS for styling a progress bar overlay
+  shinyjs::useShinyjs(),
+  
+  # CSS styling
   tags$head(
     tags$style(HTML("
       #progress {
@@ -15,220 +15,131 @@ ui <- fluidPage(
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        width: 50%;  
+        width: 50%;
         z-index: 9999;
       }
     "))
   ),
   
-  # Title and attribution for research purposes
-  titlePanel("CliPP-on-Web: Clonal structure identification through penalizing pairwise differences"),
-  div(p("Copyright ", HTML("&copy;"), " 2024 Wang Lab at MD Anderson. All rights reserved.")),
+  titlePanel("DeMixSC: A deconvolution framework that uses single-cell sequencing plus a small benchmark dataset for accurate analysis of cell type ratios in complex tissue samples"),
+  div(p("Copyright © 2024 Wang Lab at MD Anderson. All rights reserved.")),
   
-  # Multi-page navigation structure
   navbarPage("",
-             
-             # Page 1: About section with application description and contact info
+             # About tab
              tabPanel("About",
                       tags$div(
-                        tags$h4(tags$b(tags$span("Description"))),
-                        p("Intra-tumor heterogeneity is an important driver of tumor evolution and therapy response. Advances in precision cancer treatment will require understanding of 
-                        mutation clonality and subclonal architecture. Currently the slow computational speed of subclonal reconstruction hinders large cohort studies. To overcome this 
-                        bottleneck, we developed Clonal structure identification through Pairwise Penalization, or CliPP, which clusters subclonal mutations using a regularized likelihood 
-                        model. CliPP reliably processed whole-genome and whole-exome sequencing data from over 12,000 tumor samples within 24 hours, thus enabling large-scale downstream 
-                        association analyses between subclonal structures and clinical outcomes. Through a pan-cancer investigation of 7,827 tumors from 32 cancer types, we found that high 
-                        subclonal mutational load (sML), a measure of latency time in tumor evolution, was significantly associated with better patient outcomes in 16 cancer types with low to 
-                        moderate tumor mutation burden (TMB). In a cohort of prostate cancer patients participating in an immunotherapy clinical trial, high sML was indicative of favorable 
-                        response to immune checkpoint blockade. This comprehensive study using CliPP underscores sML as a key feature of cancer. sML may be essential for linking mutation 
-                        dynamics with immunotherapy response in the large population of non-high TMB cancers. Also see our paper:",
-                          a(href = "https://www.biorxiv.org/content/10.1101/2024.07.03.601939v1",
-                            "https://www.biorxiv.org/content/10.1101/2024.07.03.601939v1"),"."),
+                        tags$h4(tags$b("Description")),
+                        p("Bulk deconvolution with single-cell/nucleus RNA-seq data is critical for understanding heterogeneity in complex biological samples, yet the technological 
+                          discrepancy across sequencing platforms limits deconvolution accuracy. To address this, we utilize an experimental design to match inter-platform biological 
+                          signals, hence revealing the technological discrepancy, and then develop a deconvolution framework called DeMixSC using this well-matched, i.e., benchmark, 
+                          data. Built upon a novel weighted nonnegative least-squares framework, DeMixSC identifies and adjusts genes with high technological discrepancy and aligns 
+                          the benchmark data with large patient cohorts of matched-tissue-type for large-scale deconvolution. Our results using two benchmark datasets of healthy retinas 
+                          and ovarian cancer tissues suggest much-improved deconvolution accuracy. Leveraging tissue-specific benchmark datasets, we applied DeMixSC to a large cohort 
+                          of 453 age-related macular degeneration patients and a cohort of 30 ovarian cancer patients with various responses to neoadjuvant chemotherapy. Only DeMixSC 
+                          successfully unveiled biologically meaningful differences across patient groups, demonstrating its broad applicability in diverse real-world clinical 
+                          scenarios. Our findings reveal the impact of technological discrepancy on deconvolution performance and underscore the importance of a well-matched dataset 
+                          to resolve this challenge. The developed DeMixSC framework is generally applicable for accurately deconvolving large cohorts of disease tissues, including 
+                          cancers, when a well-matched benchmark dataset is available."),
                         tags$br(),
-                        p(tags$b(tags$span(style = "color: #D22B2B;", "For issues with the app, please contact:"))),
-                        p("Aaron Wu - ", a(href = "mailto:aw80@rice.edu", "aw80@rice.edu")),
-                        p("Quang Tran - ", a(href = "mailto:qmtran@mdanderson.org", "qmtran@mdanderson.org"))
+                        p(strong("For issues with the app, please contact:")),
+                        p("Aaron Wu - ", a(href="mailto:aw80@rice.edu", "aw80@rice.edu")),
+                        p("Quang Tran - ", a(href="mailto:qmtran@mdanderson.org", "qmtran@mdanderson.org"))
                       )
              ),
              
-             # Page 2: Tutorial section with an embedded video
+             # Tutorial tab  
              tabPanel("Tutorial",
                       tags$div(
-                        tags$h4(tags$b("Video Tutorial")),
-                        tags$p("Watch the video below to learn how to use the CliPP-on-Web application:"),
-                        tags$iframe(src="https://www.youtube.com/embed/ZPX_hC-uiYA", 
-                                    style="width:80%; height:700px; border:none;"))),
-             
-             
-             # Page 3: Main functionality for uploading and analyzing data with CliPP-on-Web
-             tabPanel("CliPP-on-Web",
-                      tags$div(
-                        tags$h4(tags$b("Upload Files")),
-                        sidebarLayout(
-                          
-                          # Sidebar for file upload and input controls
-                          sidebarPanel(
-                            tags$div(
-                              p("The online tool requires three files as input: SNV File, CNA File and Cancer Purity File.
-                                Please check the three links below to download the example files:"),
-                              p(a("SNV file", href="sample.snv.txt", download="sample.snv.txt"), 
-                                "TSV file with columns: chromosome_index, position, ref_count, alt_count", br(),
-                                a("CNA file", href="sample.cna.txt", download="sample.cna.txt"), 
-                                "TSV file with columns: chromosome_index, start_position, end_position, major_cn, minor_cn, and total_cn", br(),
-                                a("Purity file", href="sample.purity.txt", download="sample.purity.txt"), 
-                                "File storing a scalar purity value between 0 and 1"),
-                              p("When uploading files, please ensure the file names contain the appropriate suffixes (e.g., snv.txt, cna.txt, purity.txt) to help the application correctly identify and process them.")
-                            ),
-                            radioButtons("uploadMode", "Choose your upload method:",
-                                         choices = list("Upload all files at once" = "all_at_once",
-                                                        "Upload files individually" = "individually"),
-                                         selected = "all_at_once"),
-                            
-                            numericInput("numSamples", "Number of samples:", min = 1, max = 10, value = 1),
-                            actionButton("setSamples", "Set Samples", class = "btn-primary"),
-                            br(),
-                            uiOutput("dynamicFileInputs"),
-                            hidden(actionButton("uploadSamples", "Upload Samples", class = "btn-primary")),
-                            br(),
-                            hidden(selectInput("selectedSample", "Select a sample to analyze:", choices = NULL)),
-                            hidden(actionButton("submit", "Submit", class = "btn-primary")),
-                            hidden(selectInput("colorBy", "Color points by:", choices = list("Clonality" = "clonality", "Read Depth" = "readDepth"), selected = "clonality")),
-                            #selectInput("penaltyType", "Select Penalty Type:", choices = c("Lasso", "MCP"), selected = "Lasso"),
-                            hidden(sliderInput("smoothingFactor1", "Smoothing Factor for VAF Plot:",
-                                               min = 0.2, max = 0.7, value = 0.45)),
-                            uiOutput("smoothingExplanation1"),
-                            hidden(sliderInput("smoothingFactor2", "Smoothing Factor for CP Plot:",
-                                               min = 0.2, max = 0.7, value = 0.45)),
-                            uiOutput("smoothingExplanation2"),
-                            hidden(actionButton("clear", "Clear", class = "btn-danger"))
-                          ),
-                          
-                          # Main panel to display plots and analysis output
-                          mainPanel(
-                            plotlyOutput("plot1"),
-                            uiOutput("caption1"),
-                            plotlyOutput("plot2"),
-                            uiOutput("caption2"),
-                            uiOutput("plotOutputArea"),
-                            hidden(div(id = "plotReadyTextCliPP")),
-                            shinyjs::hidden(
-                              shinyWidgets::progressBar(
-                                id = "progress",
-                                value = 0,
-                                total = 100,
-                                display_pct = TRUE
-                              )
-                            )
-                          )
+                        tags$iframe(
+                          src = "https://wwylab.github.io/DeMixSC/",
+                          width = "100%",
+                          height = "800px",
+                          frameborder = "0",
+                          style = "border: none;"
                         )
                       )
              ),
              
-             # Page 4: CliPP Data Resources with automatic data loading and visualization
-             tabPanel("CliPP Data Resources",
-                      tags$div(
-                        tabsetPanel(
-                          # Subsection for TCGA data selection and analysis
-                          tabPanel("TCGA",
-                                   tags$div(
-                                     tags$h4(tags$b("TCGA Select")),
-                                     sidebarLayout(
-                                       sidebarPanel(
-                                         uiOutput("cancer_type_ui_TCGA"),
-                                         uiOutput("sample_name_ui_TCGA"),
-                                         actionButton("submitTCGA", "Submit", class = "btn-primary"),
-                                         hidden(selectInput("colorByTCGA", "Color points by:", choices = list("Clonality" = "clonality", "Read Depth" = "readDepth"), selected = "clonality")),
-                                         #selectInput("penaltyType", "Select Penalty Type:", choices = c("Lasso", "MCP"), selected = "Lasso"),
-                                         hidden(sliderInput("smoothingFactor1_TCGA", "Smoothing Factor for VAF Plot:",
-                                                            min = 0.2, max = 0.7, value = 0.45)),
-                                         uiOutput("smoothingExplanation1_TCGA"),
-                                         hidden(sliderInput("smoothingFactor2_TCGA", "Smoothing Factor for CP Plot:",
-                                                            min = 0.2, max = 0.7, value = 0.45)),
-                                         uiOutput("smoothingExplanation2_TCGA")
-                                       ),
-                                       mainPanel(
-                                         plotlyOutput("plot1TCGA"),
-                                         uiOutput("caption1TCGA"),
-                                         plotlyOutput("plot2TCGA"),
-                                         uiOutput("caption2TCGA"),
-                                         hidden(uiOutput("plotOutputAreaTCGA")),
-                                         hidden(div(id = "plotReadyTextTCGA")),
-                                         uiOutput("downloadUI_TCGA")
-                                       )
-                                     )
-                                   )
-                          ),
-                          # Subsection for PCAWG data selection and analysis
-                          tabPanel("PCAWG",
-                                   tags$div(
-                                     tags$h4(tags$b("PCAWG Select")),
-                                     sidebarLayout(
-                                       sidebarPanel(
-                                         uiOutput("cancer_type_ui_PCAWG"),
-                                         uiOutput("sample_name_ui_PCAWG"),
-                                         actionButton("submitPCAWG", "Submit", class = "btn-primary"),
-                                         hidden(selectInput("colorByPCAWG", "Color points by:", choices = list("Clonality" = "clonality", "Read Depth" = "readDepth"), selected = "clonality")),
-                                         #selectInput("penaltyType", "Select Penalty Type:", choices = c("Lasso", "MCP"), selected = "Lasso"),
-                                         hidden(sliderInput("smoothingFactor1_PCAWG", "Smoothing Factor for VAF Plot:",
-                                                            min = 0.2, max = 0.7, value = 0.45)),
-                                         uiOutput("smoothingExplanation1_PCAWG"),
-                                         hidden(sliderInput("smoothingFactor2_PCAWG", "Smoothing Factor for CP Plot:",
-                                                            min = 0.2, max = 0.7, value = 0.45)),
-                                         uiOutput("smoothingExplanation2_PCAWG")
-                                       ),
-                                       mainPanel(
-                                         plotlyOutput("plot1PCAWG"),
-                                         uiOutput("caption1PCAWG"),
-                                         plotlyOutput("plot2PCAWG"),
-                                         uiOutput("caption2PCAWG"),
-                                         hidden(uiOutput("plotOutputAreaPCAWG")),
-                                         hidden(div(id = "plotReadyTextPCAWG")),
-                                         uiOutput("downloadUI_PCAWG")
-                                       )
-                                     )
-                                   )
-                          )
-                        )
-                      )
-             ),
-             
-             # Page 5: Driver Mutation analysis tool
-             tabPanel("Driver Mutation",
+             # Custom Analysis tab
+             tabPanel("Custom Analysis",
                       sidebarLayout(
                         sidebarPanel(
-                          uiOutput("cancer_type_ui_driver"),
-                          sliderInput("smoothingFactor1_driver", "Smoothing Factor for VAF Plot:",
-                                      min = 0.2, max = 0.7, value = 0.45),
-                          uiOutput("smoothingExplanation1_driver"),
-                          sliderInput("smoothingFactor2_driver", "Smoothing Factor for CP Plot:", 
-                                      min = 0.2, max = 0.7, value = 0.45),
-                          uiOutput("smoothingExplanation2_driver")
+                          tags$div(
+                            p("Required input files:"),
+                            p("1. Count Matrix (genes x samples)"),
+                            p("2. Cell Type Annotations"),
+                            
+                            fileInput("countsFile", "Upload Count Matrix:", accept = c(".csv", ".txt")),
+                            fileInput("annotFile", "Upload Annotations:", accept = c(".csv", ".txt")),
+                            numericInput("minExpression", "Minimum Expression:", value = 3),
+                            numericInput("scaleFactor", "Scale Factor:", value = 1e5),
+                            actionButton("runAnalysis", "Run Analysis", class = "btn-primary"),
+                            br(),
+                            downloadButton("downloadCustomResults", "Download Results")
+                          )
                         ),
                         mainPanel(
-                          DT::DTOutput("driverMutationTable"),
-                          uiOutput("selectedMutationInfo"),
-                          plotlyOutput("driverPlot1"),
-                          plotlyOutput("driverPlot2"),
-                          downloadButton("downloadDriverMutation", "Download Data"),
-                          tags$h4(tags$b(tags$span("Reference:"))),
-                          p("Martínez-Jiménez, Francisco, et al. 'A compendium of mutational cancer driver genes.' Nature Reviews Cancer 20.10 (2020): 555-572.")
+                          plotlyOutput("customPlot1"),
+                          DTOutput("customTable")
                         )
                       )
              ),
              
-             # Page 6: Citations for related studies and resources
+             # Package Data tab
+             tabPanel("Package Data",
+                      tags$div(
+                        tabsetPanel(
+                          tabPanel("Retina",
+                                   tags$div(
+                                     sidebarLayout(
+                                       sidebarPanel(
+                                         selectInput("retinaDataset", "Select Dataset:", 
+                                                     choices = c("AMD Cohort", "Benchmark")),
+                                         actionButton("runRetina", "Run Analysis", 
+                                                      class = "btn-primary"),
+                                         br(), br(),
+                                         downloadButton("downloadRetinaResults", 
+                                                        "Download Results")
+                                       ),
+                                       mainPanel(
+                                         plotlyOutput("retinaPlot"),
+                                         DTOutput("retinaTable")
+                                       )
+                                     )
+                                   )
+                          ),
+                          tabPanel("HGSC",
+                                   tags$div(
+                                     sidebarLayout(
+                                       sidebarPanel(
+                                         selectInput("hgscDataset", "Select Dataset:", 
+                                                     choices = c("Lee Cohort", "Benchmark")),
+                                         actionButton("runHGSC", "Run Analysis", 
+                                                      class = "btn-primary"),
+                                         br(), br(),
+                                         downloadButton("downloadHGSCResults", 
+                                                        "Download Results")
+                                       ),
+                                       mainPanel(
+                                         plotlyOutput("hgscPlot"),
+                                         DTOutput("hgscTable")
+                                       )
+                                     )
+                                   )
+                          )
+                        )
+                      )
+             ),
+             
+             # Citations tab
              tabPanel("Citations",
                       tags$div(
-                        tags$h4(tags$b(tags$span("Manuscript under preparation:"))),
-                        p("Yujie Jiang, Matthew D Montierth, Kaixian Yu, Shuangxi Ji, 
-                          Quang Tran, Xiaoqian Liu, Jessica C Lal, Shuai Guo, Aaron Wu, 
-                          Seung Jun Shin, Shaolong Cao, Ruonan Li, Yuxin Tang, Tom Lesluyes, 
-                          Scott Kopetz, Pavlos Msaouel, Anil K. Sood, Christopher Jones, Jaffer Ajani, 
-                          Sumit K Subudhi, Ana Aparicio, Padmanee Sharma, John Paul Shen,  Marek Kimmel, 
-                          Jennifer R. Wang, Maxime Tarabichi, Rebecca Fitzgerald, Peter Van Loo, Hongtu Zhu, 
-                          Wenyi Wang. Subclonal mutational load predicts survival and response to immunotherapy 
-                          in cancers with low to moderate TMB.",
-                          a(href = "https://www.biorxiv.org/content/10.1101/2024.07.03.601939v1",
-                            "https://www.biorxiv.org/content/10.1101/2024.07.03.601939v1"),".")
+                        h4(tags$b("Published manuscript:")),
+                        p("Shuai Guo, Xiaoqian Liu, Xuesen Cheng, Yujie Jiang, Shuangxi Ji, Qingnan Liang, Andrew Koval, Yumei Li, 
+                          Leah A. Owen, Ivana K. Kim, Ana Aparicio, Sanghoon Lee, Anil K. Sood, Scott Kopetz, John Paul Shen, 
+                          John N. Weinstein, Margaret M. DeAngelis, Rui Chen, Wenyi Wang"),
+                        a(href="https://genome.cshlp.org/content/early/2024/11/22/gr.278822.123.abstract",
+                          "https://genome.cshlp.org/content/early/2024/11/22/gr.278822.123.abstract")
                       )
              )
   )
